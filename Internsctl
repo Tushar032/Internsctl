@@ -1,0 +1,175 @@
+#!/bin/bash
+
+VERSION="v0.1.0"
+
+show_help() {
+    echo "Usage: internsctl [options] <command>"
+    echo "Options:"
+    echo "--help	Show this help message"
+    echo "--version	Show version information"
+    echo ""
+    echo "Commands:"
+    echo "ls	List available commands"
+    echo "cpu getinfo Get CPU information"
+    echo "memory getinfo Get memory information"
+    echo "user create <username>    Create a new user"
+    echo "user list [--sudo-only] List users"
+    echo "file getinfo [options] <file-name> Get information about a file"
+    echo ""
+    echo "File Information Options:"
+    echo "--size, -s	Print file size"
+    echo "--permissions, -p  Print file permissions"
+    echo "--owner, -o	Print file owner"
+    echo "--last-modified, -m Print last modified time"
+}
+
+show_version() {
+    echo "internsctl version $VERSION"
+}
+
+ls_command(){
+     echo "Available commands:"
+     echo "  ls"
+     echo "  cpu getinfo"
+     echo "  memory getinfo"
+     echo "  user create <username>"
+     echo "  user list [--sudo-only]"
+     echo "  file getinfo [options] <file-name>"
+}
+
+cpu_getinfo() {
+     lscpu
+}
+
+memory_getinfo() {
+     free -m
+}
+
+user_create() {
+    if [ $# -eq 2 ]; then
+        sudo useradd -m "$2"
+        echo "User $2 created successfully."
+    else
+        echo "Usage: internsctl user create <username>"
+    fi
+}
+
+user_list() {
+     if [ "$2" == "--sudo-only" ]; then
+         getent group sudo | cut -d: -f4 | tr ',' '\n'
+     else
+         getent passwd | cut -d: -f1
+     fi
+}
+
+file_getinfo() {
+    if [ $# -lt 2 ]; then
+        echo "Usage: internsctl file getinfo [options] <file-name>"
+        return
+    fi
+    
+    file_name="${@: -1}"
+    
+    if [ ! -e "$file_name" ]; then
+        echo "File not found: $file_name"
+        return
+    fi
+    
+    size_option=false
+    permissions_option=false
+    owner_option=false
+    last_modified_option=false
+    
+    while [ "$#" -gt 1 ]; do
+        case "$1" in
+            --size | -s)
+                size_option=true
+                ;;
+            --permissions | -p)
+                permissions_option=true
+                ;;
+            --owner | -o)
+                owner_option=true
+                ;;
+            --last-modified | -m)
+                last_modified_option=true
+                ;;
+            *)
+                echo "Unknown option: $1"
+                ;;
+        esac
+        shift
+    done
+    
+    file_info="File: $file_name"
+    
+    if $size_option; then
+        file_info+="\nSize(B): $(stat -c%s "$file_name")"
+    fi
+    
+    if $permissions_option; then
+        file_info+="\nAccess: $(stat -c%a "$file_name")"
+    fi
+    
+    if $owner_option; then
+        file_info+="\nOwner: $(stat -c%U "$file_name")"
+    fi
+    
+    if $last_modified_option; then
+        file_info+="\nModify: $(stat -c%y "$file_name")"
+    fi
+    
+    echo -e "$file_info"
+}
+
+#Main
+if [ $# -eq 0 ]; then
+   show_help
+else
+   case "$1" in
+     ls)
+        ls_command
+        ;;
+     --help)
+        show_help
+        ;;
+     --version)
+        show_version
+        ;;
+     cpu)
+        cpu_getinfo
+        ;;
+     memory)
+        memory_getinfo
+        ;;
+     user)
+        shift
+        case "$1" in
+           create)
+               user_create "$@"
+               ;;
+           list)
+               user_list "$@"
+               ;;
+           *)
+             echo "Unknown subcommand for 'user': $1"
+             ;;
+        esac
+        ;;
+     file)
+         shift
+         case "$1" in
+            getinfo)
+                  shift
+                  file_getinfo "$@"
+                  ;;
+            *)
+              echo "Unknown subcommand for 'file': $1"
+              ;;
+         esac
+         ;;
+     *)
+       echo "Unknown command: $1"
+       ;;
+   esac
+fi
